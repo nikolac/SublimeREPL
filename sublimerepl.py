@@ -15,6 +15,7 @@ import buzhug
 import re
 import sublimerepl_build_system_hack
 
+
 PLATFORM = sublime.platform().lower()
 SETTINGS_FILE = 'SublimeREPL.sublime-settings'
 
@@ -139,7 +140,7 @@ class PersistentHistory(History):
 
 
 class ReplView(object):
-    def __init__(self, view, repl, syntax):
+    def __init__(self, view, repl, syntax, fPath=""):
         self.repl = repl
         self._view = view
         self._window = view.window()
@@ -158,6 +159,9 @@ class ReplView(object):
         view.settings().set("repl_external_id", repl.external_id)
         view.settings().set("repl_id", repl.id)
         view.settings().set("repl", True)
+        view.settings().set("repl_file_path", fPath)
+        view.settings().set('open_in_last_group', settings.get('open_in_last_group', False))
+        view.settings().set('close_dup_tab', settings.get('close_dup_tab', False))
 
         rv_settings = settings.get("repl_view_settings", {})
         for setting, value in rv_settings.items():
@@ -351,6 +355,9 @@ class ReplView(object):
         self._view.show(self.input_region)
         self._window.focus_view(self._view)
 
+    def get_view(self):
+        return self._view
+        
     @property
     def input_region(self):
         return sublime.Region(self._output_end, self._view.size())
@@ -399,6 +406,15 @@ class ReplManager(object):
 
     def open(self, window, encoding, type, syntax=None, view_id=None, **kwds):
         try:
+            fPath = (window.active_view().file_name() or "")
+            for v in window.views():
+                vFPath = v.settings().get('repl_file_path', "")
+                closeDup =v.settings().get('close_dup_tab',False)
+
+                if fPath != "" and vFPath == fPath and closeDup :
+                    window.set_view_index(v, 0, 0)
+                    window.run_command('close')
+            
             kwds = ReplManager.translate(window, kwds)
             encoding = ReplManager.translate(window, encoding)
             r = repls.Repl.subclass(type)(encoding, **kwds)
@@ -409,11 +425,18 @@ class ReplManager(object):
                     break
             view = found or window.new_file()
 
-            rv = ReplView(view, r, syntax)
+            rv = ReplView(view, r, syntax, fPath)
             rv.closed += self._delete_repl
             self.repl_views[r.id] = rv
             view.set_scratch(True)
-            view.set_name("*REPL* [%s]" % (r.name(),))
+            fName = fPath.split('\\')[-1] or r.name()
+            view.set_name("*REPL* [%s]" % (fName,))
+            
+            if view.settings().get('open_in_last_group', False):
+                gIdx = window.num_groups() - 1
+                vIdx = len(window.views_in_group(gIdx))
+                window.set_view_index(view, gIdx, vIdx)
+
             return rv
         except Exception, e:
             sublime.error_message(repr(e))
@@ -501,6 +524,8 @@ manager = ReplManager()
 class ReplOpenCommand(sublime_plugin.WindowCommand):
     def run(self, encoding, type, syntax=None, view_id=None, **kwds):
         manager.open(self.window, encoding, type, syntax, view_id, **kwds)
+        
+        
 
 
 # View Commands ###########################################

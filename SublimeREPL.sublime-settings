@@ -46,4 +46,11 @@
 	// WARNING: this will switch your build system back to Automatic each time a REPL
 	// is started so beware!
 	"use_build_system_hack": false
+
+	,// If true, closes the first REPL console when a second 
+	// console is launched for the same file
+	"close_dup_tab":false
+
+	//If true, opens REPL as the last tab in the last group
+	,"open_in_last_group":false
 }
